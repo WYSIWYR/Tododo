@@ -1,14 +1,19 @@
 package com.why_group.tododo
 
+import android.app.Activity
+import android.content.Intent
 import android.graphics.Paint
 import android.graphics.Typeface
 import androidx.appcompat.app.AppCompatActivity
 import android.os.Bundle
-import android.view.LayoutInflater
-import android.view.ViewGroup
+import android.view.*
 import androidx.activity.viewModels
+import androidx.lifecycle.Observer
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.firebase.ui.auth.AuthUI
+import com.firebase.ui.auth.IdpResponse
+import com.google.firebase.auth.FirebaseAuth
 import com.why_group.tododo.databinding.ActivityMainBinding
 import com.why_group.tododo.databinding.TodoItemBinding
 
@@ -19,6 +24,7 @@ class MainActivity : AppCompatActivity() {
      */
     private lateinit var binding: ActivityMainBinding
     private val viewModel: MainViewModel by viewModels()
+    private val RC_SIGN_IN = 1000
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -26,17 +32,19 @@ class MainActivity : AppCompatActivity() {
         val view = binding.root
         setContentView(view)
 
+        if (FirebaseAuth.getInstance().currentUser == null) {
+            signIn()
+        }
+
         binding.todoList.apply {
             layoutManager = LinearLayoutManager(this@MainActivity)
             adapter = TodoAdapter(
-                viewModel.data,
+                emptyList(),
                 onClickDelete = {
                     viewModel.deleteTodo(it)
-                    binding.todoList.adapter?.notifyDataSetChanged()
                 },
                 onClickToggle = {
                     viewModel.toggleDone(it)
-                    binding.todoList.adapter?.notifyDataSetChanged()
                 }
             )
         }
@@ -44,13 +52,66 @@ class MainActivity : AppCompatActivity() {
         binding.addButton.setOnClickListener {
             val todo = Todo(binding.enterTodo.text.toString())
             viewModel.addTodo(todo)
-            binding.todoList.adapter?.notifyDataSetChanged()
         }
+
+        viewModel.todoLiveData.observe(this@MainActivity, Observer {
+            (binding.todoList.adapter as TodoAdapter).setLiveData(it)
+        })
+    }
+
+    override fun onCreateOptionsMenu(menu: Menu?): Boolean {
+        val inflater: MenuInflater = menuInflater
+        inflater.inflate(R.menu.main, menu)
+        return true
+    }
+
+    override fun onOptionsItemSelected(item: MenuItem): Boolean {
+        return when (item.itemId) {
+            R.id.action_sign_out -> {
+                signOut()
+                true
+            }
+            else -> super.onOptionsItemSelected(item)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+
+        if (requestCode == RC_SIGN_IN) {
+            val response = IdpResponse.fromResultIntent(data)
+
+            if (resultCode == Activity.RESULT_OK) {
+                viewModel.loadData()
+            } else {
+                finish()
+            }
+        }
+    }
+
+    fun signIn() {
+        val providers = arrayListOf(AuthUI.IdpConfig.EmailBuilder().build())
+
+        startActivityForResult(
+            AuthUI.getInstance()
+                .createSignInIntentBuilder()
+                .setAvailableProviders(providers)
+                .build(),
+            RC_SIGN_IN
+        )
+    }
+
+    fun signOut() {
+        AuthUI.getInstance()
+            .signOut(this)
+            .addOnCompleteListener {
+                signIn()
+            }
     }
 }
 
 class TodoAdapter(
-    private val myDataset: List<Todo>,
+    private var myDataset: List<Todo>,
     val onClickDelete: (todo: Todo) -> Unit,
     val onClickToggle: (todo: Todo) -> Unit
 ) :
@@ -94,4 +155,9 @@ class TodoAdapter(
     }
 
     override fun getItemCount() = myDataset.size
+
+    fun setLiveData(newData: List<Todo>) {
+        myDataset = newData
+        notifyDataSetChanged()
+    }
 }
