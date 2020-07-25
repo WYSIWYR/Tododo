@@ -4,52 +4,50 @@ import android.util.Log
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
+import com.google.firebase.firestore.QueryDocumentSnapshot
 import com.google.firebase.firestore.ktx.firestore
 import com.google.firebase.ktx.Firebase
 
 class MainViewModel : ViewModel() {
     val db = Firebase.firestore
-    val todoLiveData = MutableLiveData<List<Todo>>()
-    private val data = arrayListOf<Todo>()
+    val todoLiveData = MutableLiveData<List<DocumentSnapshot>>()
 
     init {
         loadData()
     }
 
     fun loadData() {
-        val user = FirebaseAuth.getInstance().currentUser
-        user?.apply {
-            db.collection(this.uid).get()
-                .addOnSuccessListener { result ->
-                    data.clear()
-                    for (document in result) {
-                        val todo = Todo(
-                            document.data["text"] as String,
-                            document.data["isDone"] as Boolean
-                        )
-                        data.add(todo)
-                    }
+        FirebaseAuth.getInstance().currentUser?.let {
+            db.collection(it.uid).addSnapshotListener { value, e ->
+                if (e != null) {
+                    Log.d("Error", "Error $e")
+                    return@addSnapshotListener
+                }
 
-                    todoLiveData.value = data
+                value?.let {
+                    todoLiveData.value = it.documents
                 }
-                .addOnFailureListener {
-                    Log.d("Error", "Error: $it")
-                }
+            }
         }
     }
 
     fun addTodo(todo: Todo) {
-        data.add(todo)
-        todoLiveData.value = data
+        FirebaseAuth.getInstance().currentUser?.let {
+            db.collection(it.uid).add(todo)
+        }
     }
 
-    fun toggleDone(todo: Todo) {
-        todo.isDone = !todo.isDone
-        todoLiveData.value = data
+    fun toggleDone(todo: DocumentSnapshot) {
+        FirebaseAuth.getInstance().currentUser?.let {
+            val isDone = todo.getBoolean("isDone") ?: false
+            db.collection(it.uid).document(todo.id).update("isDone", !isDone)
+        }
     }
 
-    fun deleteTodo(todo: Todo) {
-        data.remove(todo)
-        todoLiveData.value = data
+    fun deleteTodo(todo: DocumentSnapshot) {
+        FirebaseAuth.getInstance().currentUser?.let {
+            db.collection(it.uid).document(todo.id).delete()
+        }
     }
 }

@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.firebase.ui.auth.AuthUI
 import com.firebase.ui.auth.IdpResponse
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.firestore.DocumentSnapshot
 import com.why_group.tododo.databinding.ActivityMainBinding
 import com.why_group.tododo.databinding.TodoItemBinding
 
@@ -111,9 +112,9 @@ class MainActivity : AppCompatActivity() {
 }
 
 class TodoAdapter(
-    private var myDataset: List<Todo>,
-    val onClickDelete: (todo: Todo) -> Unit,
-    val onClickToggle: (todo: Todo) -> Unit
+    private var myDataset: List<DocumentSnapshot>,
+    val onClickDelete: (todo: DocumentSnapshot) -> Unit,
+    val onClickToggle: (todo: DocumentSnapshot) -> Unit
 ) :
     RecyclerView.Adapter<TodoAdapter.TodoViewHolder>() {
 
@@ -131,9 +132,9 @@ class TodoAdapter(
 
     override fun onBindViewHolder(holder: TodoViewHolder, position: Int) {
         val todo = myDataset[position]
-        holder.binding.todoText.text = todo.text
+        holder.binding.todoText.text = todo.getString("text") ?: ""
 
-        if (todo.isDone) {
+        if ((todo.getBoolean("isDone") ?: false) == true) {
             holder.binding.todoText.apply {
                 paintFlags = paintFlags or Paint.STRIKE_THRU_TEXT_FLAG
                 setTypeface(null, Typeface.ITALIC)
@@ -156,7 +157,7 @@ class TodoAdapter(
 
     override fun getItemCount() = myDataset.size
 
-    fun setLiveData(newData: List<Todo>) {
+    fun setLiveData(newData: List<DocumentSnapshot>) {
         myDataset = newData
         notifyDataSetChanged()
     }
